@@ -2,19 +2,25 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Broadcast;
+use App\Services\AgoraService;
 
 
 use App\Http\Controllers\BoardController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\GroupChatController;
+use App\Http\Controllers\CallController;
+use App\Http\Controllers\MessagesController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\TaskController;
 use App\Http\Controllers\WorkspaceController;
 use App\Http\Controllers\UserController;
-use App\Http\Controllers\SubItemController;
+use App\Http\Controllers\SubTaskController;
+use App\Http\Controllers\AgoraController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -70,13 +76,16 @@ Route::middleware('auth')->group(function () {
     // End Board Routes
 
     // Task Routes
-    Route::post('/task/store', [TaskController::class, 'store'])->name('task.store');
-    Route::get('/task/show', [TaskController::class, 'show'])->name('task.show');
-    Route::put('/task/{id}/update', [TaskController::class, 'update'])->name('task.update');
-    Route::delete('/task/{id}/delete', [TaskController::class, 'destroy'])->name('task.delete');
-    Route::post('/task/comment/store', [TaskController::class, 'storeComment'])->name('task.storeComment');
-    Route::delete('/task/comment/{id}/delete', [TaskController::class, 'destroyComment'])->name('task.deleteComment');
-    Route::get('/task-details/{id}', [TaskController::class, 'details'])->name('task.details');
+ Route::post('/task/store', [TaskController::class, 'store'])->name('task.store');
+ Route::get('/task/show', [TaskController::class, 'show'])->name('task.show');
+ Route::put('/task/{id}/update', [TaskController::class, 'update'])->name('task.update');
+ Route::delete('/task/{id}/delete', [TaskController::class, 'destroy'])->name('task.delete');
+ Route::post('/task/comment/store', [TaskController::class, 'storeComment'])->name('task.storeComment');
+ Route::delete('/task/comment/{id}/delete', [TaskController::class, 'destroyComment'])->name('task.deleteComment');
+ Route::delete('/replies/{id}', [TaskController::class, 'destroyReply'])->name('reply.destroy');
+ Route::get('/task-details/{id}', [TaskController::class, 'details'])->name('task.details');
+ Route::post('/tasks/store-reply', [TaskController::class, 'storeReply'])->name('task.storeReply');
+ Route::get('/user-suggestions', [TaskController::class, 'getSuggestions'])->name('user.suggestions');
 
     // End Task Routes
 
@@ -98,11 +107,54 @@ Route::middleware('auth')->group(function () {
     Route::delete('/role/{id}', [RoleController::class, 'destroy'])->name('role.destroy');
 
     Route::resource('user', UserController::class);
+    Route::post('/subtask/store', [SubTaskController::class, 'store'])->name('subtask.store');
+    Route::get('/subtask/show', [SubTaskController::class, 'show'])->name('subtask.show');
+    Route::put('/subtask/{id}/update', [SubTaskController::class, 'update'])->name('subtask.update');
+    Route::delete('/subtask/{id}/delete', [SubTaskController::class, 'destroy'])->name('subtask.delete');
+    Route::post('/subtask/comment/store', [SubTaskController::class, 'storeComment'])->name('subtask.storeComment');
+    Route::delete('/subtask/comment/{id}/delete', [SubTaskController::class, 'destroyComment'])->name('subtask.deleteComment');
+    Route::delete('/replies/{id}', [SubTaskController::class, 'destroyReply'])->name('reply.destroy');
+    Route::get('/subtask-details/{id}', [SubTaskController::class, 'details'])->name('subtask.details');
+    Route::post('/subtask/store-reply', [SubTaskController::class, 'storeReply'])->name('subtask.storeReply');
+    Route::get('/user-suggestions', [SubTaskController::class, 'getSuggestions'])->name('user.suggestions');
+    // chat and group chat
+    Route::get('/one-to-one-chat', [MessagesController::class, 'index'])->name('one-to-one.index');
+    Route::post('/one-to-one-chat/send', [MessagesController::class, 'send'])->name('one-to-one.send');
 
-    Route::get('/subitem/store', [SubItemController::class, 'store'])->name('subitem.store');
-    Route::post('/subitem/store', [SubItemController::class, 'store'])->name('subitem.store');
+    
+Route::get('/groups', [GroupChatController::class, 'index'])->name('groups.index');
 
+Route::post('/groups', [GroupChatController::class, 'createGroup'])->name('groups.create');
 
+// Add Users to a Group
+Route::post('/groups/{group}/users', [GroupChatController::class, 'addUsersToGroup'])->name('groups.addUsers');
+
+// Send a Message to a Group
+Route::post('/groups/{group}/send-message', [GroupChatController::class, 'sendMessage'])->name('groups.sendMessage');Route::get('/groups/{group}', [GroupChatController::class, 'show'])->name('groups.show');
+Route::delete('/groups/{group}/remove', [GroupChatController::class, 'removeGroup'])
+    ->name('groups.remove');
+// Fetch Messages for a Group
+Route::get('/groups/{group}/messages', [GroupChatController::class, 'fetchGroupMessages'])->name('groups.fetchMessages');
+Route::delete('/groups/{group}/messages/{message}', [GroupChatController::class, 'deleteGroupMessage'])->name('groups.messages.delete');
+    Route::post('/mark-as-read', [MessagesController::class, 'markAsRead'])->name('chat.markAsRead');
+    Route::get('search', [MessagesController::class, 'search'])->name('user.search');
+    Route::post('/group/create', [MessagesController::class, 'createGroup'])->name('group.create');
+    Route::delete('/message/{id}/delete', [MessagesController::class, 'delete'])->name('message.delete');
+    Route::post('/group/{group}/add-users', [MessagesController::class, 'addUsers'])->name('group.addUsers');
+Route::delete('/group/{group}/remove-user/{user}', [MessagesController::class, 'removeUser'])->name('group.removeUser');
+
+// call handle
+Route::get('/fetch-notifications', [CallController::class, 'fetchNotifications'])->name('fetch.notifications');
+Route::post('/generate-agora-token', [CallController::class, 'generateToken']);
+Route::post('/send-call-notification', [CallController::class, 'initiateCall']);
+Route::get('/call/{reciever_id}/{type}', [CallController::class, 'showCallPage'])->name('call.page');
+Route::post('/send-call-notificationss', [CallController::class, 'sendCallNotification']);
+Route::get('/fetch-notifications', [CallController::class, 'fetchNotifications']);
+Route::post('/mark-notification-read', [CallController::class, 'markNotificationRead']);
+Route::post('/initiate-group-call', [CallController::class, 'initiateGroupCall'])->name('initiate.group.call');
+Route::get('/group-call/{groupId}/{type}', [CallController::class, 'showGroupCallPage'])->name('group.call');
+
+Route::get('/get-agora-token', [AgoraController::class, 'getToken']);
 });
 
 Route::post('/save-editor-data', function (Request $request) {
@@ -118,3 +170,7 @@ Route::post('/save-editor-data', function (Request $request) {
 Route::get('/collaborate', [InvitationController::class, 'joinTeam']);
 
 require __DIR__ . '/auth.php';
+
+Route::delete('/chat/messages/{message}', 'ChatController@destroy')->name('one-to-one.delete');
+
+Broadcast::routes(['middleware' => ['web', 'auth']]);

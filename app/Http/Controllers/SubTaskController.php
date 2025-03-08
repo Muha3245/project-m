@@ -1,11 +1,10 @@
 <?php
 
 namespace App\Http\Controllers;
-
+use App\Models\Subtask;
 use App\Models\Task;
 use App\Models\Project;
 use Illuminate\Support\Facades\DB;
-
 use App\Models\Reply;
 use App\Models\TaskComment;
 use App\Models\TaskHistory;
@@ -15,81 +14,124 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rules\File;
 use Illuminate\Contracts\Validation\Rule;
 
-class TaskController extends Controller
+
+
+
+
+
+
+
+
+class SubTaskController extends Controller
 {
     public function store(Request $request)
     {
-        $validData = $request->validateWithBag('task', [
-            'board_id' => ['required', 'integer', 'exists:boards,id'],
-            'title' => ['required', 'string', 'max:400'],
-            'description' => ['nullable', 'present'],
-            'status' => ['required', 'string', 'max: 191'],
-            'priority' => ['required', 'string', 'max: 191'],
-            'type' => ['required', 'string', 'max: 191'],
-            'due_date' => ['required', 'string', 'max: 191'],
-            'assigned_to' => ['required', 'integer', 'min:0', 'exists:users,id'],
-        ]);
+        // dd($request);
+        // $validData = $request->validateWithBag('subtask', [
+        //     'task_id' => ['required', 'integer', 'exists:tasks,id'],
+        //     'title' => ['required', 'string', 'max:400'],
+        //     'description' => ['nullable', 'present'],
+        //     'status' => ['required', 'string', 'max: 191'],
+        //     'priority' => ['required', 'string', 'max: 191'],
+        //     'type' => ['required', 'string', 'max: 191'],
+        //     'due_date' => ['required', 'string', 'max: 191'],
+        //     'assigned_to' => ['required', 'integer', 'min:0', 'exists:users,id'],
+        // ]);
 
-        $task = Task::create($validData);
+        // dd($validData);
+        $validData=$request->all();
+
+        $subtask = Subtask::create($validData);
 
         // Assign User
-        $task->users()->attach($validData['assigned_to'], ['role' => Task::ROLE_MEMBER]);
+        $subtask->users()->attach($validData['assigned_to'], ['role' => Subtask::ROLE_MEMBER]);
 
         // Add History
-        $task->history()->create(['user_id' => Auth::id(), 'type' => TaskHistory::TYPE_TASK_CREATED, 'data' => json_encode(['title' => $task->title])]);
+        // $subtask->history()->create(['user_id' => Auth::id(), 'type' => SubtaskHistory::TYPE_TASK_CREATED, 'data' => json_encode(['title' => $task->title])]);
 
-        return back()->withSuccess('Task has been added');
+        return back()->withSuccess('subTask has been added');
     }
 
+    // ----------------- Copied from taskController -------------------
 
 
     public function update(Request $request, $id)
     {
-        $validData = $request->validateWithBag('task', [
+        // Validate the request data
+        $validData = $request->validateWithBag('subtask', [
             'title' => ['required', 'string', 'max:400'],
             'description' => ['nullable', 'present'],
-            'status' => ['required', 'string', 'max: 191'],
-            'priority' => ['required', 'string', 'max: 191'],
-            'type' => ['required', 'string', 'max: 191'],
-            'due_date' => ['required', 'string', 'max: 191'],
-            'assigned_to' => ['required', 'integer', 'min:0', 'exists:users,id'],
+            'status' => ['required', 'string', 'max:191'],
+            'priority' => ['required', 'string', 'max:191'],
+            'type' => ['required', 'string', 'max:191'],
+            'due_date' => ['required', 'date'],
+            'assigned_to' => ['nullable', 'integer', 'exists:users,id'],
         ]);
-
-        $task = Task::findOrFail($id);
-        $task->update($validData);
-
-        // Assign User
-        $task->users()->sync([$validData['assigned_to'] => ['role' => Task::ROLE_MEMBER]]);
-
-        // Add History
-        $changedData = $task->getChanges();
-        unset($changedData["updated_at"]);
-        $task->history()->create(['user_id' => Auth::id(), 'type' => TaskHistory::TYPE_TASK_Updated, 'data' => json_encode($changedData)]);
-
-        return back()->withSuccess('Task has been updated');
-    }
-
-    public function show(Request $request)
-    {
-        // -------- for redirect for url taskshow --------------
-
-        $id = $request->query('id'); // Get 'id' from query string
-        $task = Task::find($id); // Replace with your model logic
-
-        if (!$task) {
-            abort(404, 'Task not found');
+    
+        try {
+            // Find the subtask or throw a 404 error
+            $subtask = Subtask::findOrFail($id);
+    
+            // Update the subtask
+            $subtask->update([
+                'title' => $validData['title'],
+                'description' => $validData['description'],
+                'status' => $validData['status'],
+                'priority' => $validData['priority'],
+                'type' => $validData['type'],
+                'due_date' => $validData['due_date'],
+            ]);
+    
+            // Assign or unassign users
+            if (!empty($validData['assigned_to'])) {
+                // Assign a user and set role
+                $subtask->users()->sync([
+                    $validData['assigned_to'] => ['role' => Subtask::ROLE_MEMBER]
+                ]);
+            } else {
+                // If no user is assigned, detach all existing users
+                $subtask->users()->detach();
+            }
+    
+            return back()->withSuccess('SubTask has been updated successfully.');
+    
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return back()->withErrors(['subtask' => 'The specified subtask was not found.']);
+        } catch (\Exception $e) {
+            return back()->withErrors(['error' => 'An unexpected error occurred: ' . $e->getMessage()]);
         }
-        // -------- for redirect for url taskshow --------------
-
-        $request->validate([
-            'id' => ['required', 'integer', 'min:1'],
-        ]);
-
-        $task = Task::with('subtasks','users', 'board.tasks', 'board.tasks.users', 'history', 'history.user')->findOrFail($request->get('id'));
-        $project = $task->board->project;
-        $comments = TaskComment::with('user')->where('task_id', $task->id)->latest()->get();
-        return view('taskDetails', compact('task', 'project', 'comments'));
     }
+    
+
+
+    
+    public function show(Request $request)
+{
+    // Validate the 'id' from the query string
+    $request->validate([
+        'id' => ['required', 'integer', 'min:1'],
+    ]);
+
+    $id = $request->query('id'); // Get 'id' from the query string
+
+    // Retrieve the subtask by ID, including its relationships
+    $subtask = Subtask::with('users', 'board.tasks', 'board.tasks.users', 'history', 'history.user')
+                      ->findOrFail($id);
+
+    // Retrieve the associated project from the subtask's board
+    $project = $subtask->board->project;
+
+    // Retrieve comments specific to this subtask
+    $comments = TaskComment::with('user')
+                           ->where('task_id', $subtask->task_id)
+                           ->latest()
+                           ->get();
+
+    // Pass only subtask-related data to the view
+    return view('subtaskDetails', compact('subtask', 'project', 'comments'));
+}
+
+
 
     public function storeComment(Request $request)
 {
@@ -125,8 +167,8 @@ class TaskController extends Controller
     }
 
     // Otherwise, store the comment
-    $task = Task::findOrFail($validated['task_id']);
-    $comment = $task->comments()->create([
+    $subtask = Subtask::findOrFail($validated['task_id']);
+    $comment = $subtask->comments()->create([
         'user_id' => Auth::id(),
         'comment' => $validated['comment'],
     ]);
@@ -159,8 +201,8 @@ class TaskController extends Controller
         ]);
 
 
-        $task = $comment->task; // Assuming Comment has a relationship with Task
-    $task->history()->create([
+        $subtask = $comment->subtask; // Assuming Comment has a relationship with Task
+    $subtask->history()->create([
         'user_id' => Auth::id(),
         'type' => TaskHistory::TYPE_REPLIED, // Assuming TYPE_REPLIED exists in your TaskHistory model
         'data' => json_encode(['reply' => $reply->comment]),
@@ -176,7 +218,7 @@ class TaskController extends Controller
         $comment = TaskComment::where('user_id', Auth::id())->findOrFail($id);
 
         // Add History
-        $comment->task->history()->create(['user_id' => Auth::id(), 'type' => TaskHistory::TYPE_DELETED_COMMENTED]);
+        $comment->subtask->history()->create(['user_id' => Auth::id(), 'type' => TaskHistory::TYPE_DELETED_COMMENTED]);
 
         // Delete
         $comment->delete();
@@ -188,9 +230,9 @@ class TaskController extends Controller
         $reply = Reply::where('user_id', Auth::id())->findOrFail($id);
 
         // Access the comment associated with the reply
-        // $task = $reply->task;
+        // $subtask = $reply->subtask;
         // // Add History
-        // $task->history()->create([
+        // $subtask->history()->create([
         //     'user_id' => Auth::id(),
         //     'type' => TaskHistory::TYPE_DELETED_REPLIED, // Ensure this constant is defined
         //     'data' => json_encode(['reply' => $reply->comment]), // Log the reply content
@@ -207,14 +249,14 @@ class TaskController extends Controller
 
     public function destroy($id)
     {
-        $task = Task::findOrFail($id);
-        $task->delete();
+        $subtask = Subtask::findOrFail($id);
+        $subtask->delete();
 
-        return redirect()->route('project.show', $task->board->project->id)->withSuccess('Task has been deleted');
+        return redirect()->back()->withSuccess('SubTask has been deleted');
     }
     public function details($id)
     {
-        $task = Task::findOrFail($id); // Fetch task details by ID
+        $subtask = subtask::findOrFail($id); // Fetch subtask details by ID
         $project = Project::findOrFail($id); // Fetch task details by ID
         $comments = TaskComment::where('user_id', Auth::id())->findOrFail($id);
 
@@ -236,16 +278,6 @@ class TaskController extends Controller
 
 
 
-// ----- Redirect of task show URL ----------------
-
-
-// public function index()
-// {
-//     $tasks = Task::all(); // Fetch all tasks from the database
-//     return view('tasks.index', compact('tasks')); // Pass the tasks to the view
-// }
-
-// ----- Redirect of task show URL ----------------
 
 
 

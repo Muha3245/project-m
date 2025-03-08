@@ -134,6 +134,13 @@
       </a>
     </li>
     <li class="menu-item">
+      <a href="{{route('one-to-one.index')}}" target="_blank"
+        class="menu-link">
+        <i class="menu-icon tf-icons bx bx-chat"></i>
+        <div data-i18n="Support">chat</div>
+      </a>
+    </li>
+    <li class="menu-item">
       <a href="https://themeselection.com/demo/sneat-bootstrap-html-admin-template/documentation/" target="_blank"
         class="menu-link">
         <i class="menu-icon tf-icons bx bx-file"></i>

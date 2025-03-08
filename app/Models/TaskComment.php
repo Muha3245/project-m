@@ -31,4 +31,12 @@ class TaskComment extends Model implements HasMedia
     {
         return $this->belongsTo(User::class, 'user_id');
     }
+    public function replies()
+    {
+        return $this->hasMany(Reply::class);
+    }
+    public function mentions()
+    {
+        return $this->hasMany(Mention::class);
+    }
 }

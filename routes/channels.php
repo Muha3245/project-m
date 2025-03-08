@@ -13,6 +13,13 @@ use Illuminate\Support\Facades\Broadcast;
 |
 */
 
-Broadcast::channel('App.Models.User.{id}', function ($user, $id) {
-    return (int) $user->id === (int) $id;
+Broadcast::channel('chat.{id}', function () {
+    return true; // No authentication required
 });
+
+
+Broadcast::channel('group.{groupId}', function () {
+    return true; // You can add authorization logic here
+});
+
+
